@@ -1,0 +1,19 @@
+[project]
+name = "demo-app"
+version = "0.1.0"
+description = "Minimal web app and worker for testing how an application stack deploys onto different clusters."
+requires-python = ">=3.14"
+dependencies = [
+    "azure-identity>=1.27.0",
+    "azure-storage-blob>=12.31.1",
+    "boto3>=1.44.5",
+    "fastapi>=0.164.0",
+    "pika>=1.5.0",
+    "psycopg[binary]>=3.3.9",
+    "pyjwt[crypto]>=2.15.1",
+    "python-multipart>=0.0.34",
+    "uvicorn>=0.54.0",
+]
+
+[tool.ruff]
+line-length = 120

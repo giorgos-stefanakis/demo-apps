@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo app</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+    section { border-top: 1px solid #ccc; padding: 1rem 0; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { text-align: left; padding: 0.25rem 0.5rem 0.25rem 0; }
+    #chat-output { white-space: pre-wrap; min-height: 3rem; }
+    .error { color: #b00020; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@5.29.1/lib/msal-browser.min.js"
+          integrity="sha384-xHJFgyahKVuzavO75uNT6xBc9ileK2xOlllrnVhB+g4a61bPC6HJBLzxM/iX4/N0"
+          crossorigin="anonymous"></script>
+</head>
+<body>
+  <h1>Demo app</h1>
+
+  <section>
+    <p id="account">Not signed in.</p>
+    <button id="sign-in">Sign in</button>
+    <button id="sign-out" hidden>Sign out</button>
+  </section>
+
+  <section>
+    <h2>Upload</h2>
+    <form id="upload-form">
+      <input type="file" name="file" required>
+      <button type="submit">Upload</button>
+    </form>
+    <p id="upload-status"></p>
+  </section>
+
+  <section>
+    <h2>Files</h2>
+    <button id="refresh-files">Refresh</button>
+    <table>
+      <thead><tr><th>Name</th><th>Bytes</th><th>Stored</th></tr></thead>
+      <tbody id="files"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Chat</h2>
+    <button id="chat">Ask</button>
+    <p id="chat-output"></p>
+  </section>
+
+  <p id="error" class="error"></p>
+
+  <script>
+    const element = (id) => document.getElementById(id);
+    let msalClient;
+    let apiScope;
+
+    function showError(error) {
+      element("error").textContent = String(error);
+    }
+
+    function showAccount() {
+      const account = msalClient.getActiveAccount();
+      element("account").textContent = account ? `Signed in as ${account.username}.` : "Not signed in.";
+      element("sign-in").hidden = Boolean(account);
+      element("sign-out").hidden = !account;
+    }
+
+    async function accessToken() {
+      const account = msalClient.getActiveAccount();
+      if (!account) {
+        throw new Error("Sign in first.");
+      }
+      try {
+        const result = await msalClient.acquireTokenSilent({ scopes: [apiScope], account });
+        return result.accessToken;
+      } catch (error) {
+        if (error instanceof msal.InteractionRequiredAuthError) {
+          await msalClient.acquireTokenRedirect({ scopes: [apiScope] });
+        }
+        throw error;
+      }
+    }
+
+    async function callApi(path, options = {}) {
+      const token = await accessToken();
+      const headers = { ...options.headers, Authorization: `Bearer ${token}` };
+      const response = await fetch(path, { ...options, headers });
+      if (!response.ok) {
+        throw new Error(`${path}: ${response.status} ${await response.text()}`);
+      }
+      return response;
+    }
+
+    async function refreshFiles() {
+      const files = await (await callApi("/files")).json();
+      element("files").replaceChildren(...files.map((file) => {
+        const row = document.createElement("tr");
+        for (const value of [file.filename, file.size_bytes, new Date(file.created_at).toLocaleString()]) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        }
+        return row;
+      }));
+    }
+
+    async function upload(event) {
+      event.preventDefault();
+      const response = await callApi("/upload", { method: "POST", body: new FormData(event.target) });
+      const { objectKey } = await response.json();
+      element("upload-status").textContent = `Uploaded ${objectKey}. The worker adds it to the list.`;
+      event.target.reset();
+    }
+
+    async function chat() {
+      const output = element("chat-output");
+      output.textContent = "";
+      const response = await callApi("/chat");
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) {
+          return;
+        }
+        buffer += value;
+        const events = buffer.split("\n\n");
+        buffer = events.pop();
+        for (const event of events) {
+          const data = event.split("\n").find((line) => line.startsWith("data: "));
+          const token = data && JSON.parse(data.slice(6)).token;
+          if (token) {
+            output.textContent += token;
+          }
+        }
+      }
+    }
+
+    function run(action) {
+      return (event) => {
+        element("error").textContent = "";
+        action(event).catch(showError);
+      };
+    }
+
+    async function start() {
+      const config = await (await fetch("/config.json")).json();
+      apiScope = `${config.apiAudience}/access_as_user`;
+      msalClient = new msal.PublicClientApplication({
+        auth: {
+          clientId: config.clientId,
+          authority: `https://login.microsoftonline.com/${config.tenantId}`,
+          redirectUri: window.location.origin + "/",
+        },
+        cache: { cacheLocation: "sessionStorage" },
+      });
+      await msalClient.initialize();
+      const result = await msalClient.handleRedirectPromise();
+      const account = result?.account ?? msalClient.getAllAccounts()[0];
+      if (account) {
+        msalClient.setActiveAccount(account);
+      }
+      showAccount();
+
+      element("sign-in").addEventListener("click", run(() => msalClient.loginRedirect({ scopes: [apiScope] })));
+      element("sign-out").addEventListener("click", run(() => msalClient.logoutRedirect()));
+      element("upload-form").addEventListener("submit", run(upload));
+      element("refresh-files").addEventListener("click", run(refreshFiles));
+      element("chat").addEventListener("click", run(chat));
+    }
+
+    start().catch(showError);
+  </script>
+</body>
+</html>
