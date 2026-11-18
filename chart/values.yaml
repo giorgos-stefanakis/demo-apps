@@ -1,0 +1,44 @@
+image:
+  repository: demo-app
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Sign-in settings of the Entra ID app registration.
+auth:
+  tenantId: ""
+  clientId: ""
+  apiAudience: ""
+
+# The values below bind the app to the cluster. Each cluster sets them.
+
+routing:
+  type: gateway-api # gateway-api or ingress
+  hostname: ""
+  gatewayApi:
+    parentRef: {}
+  ingress:
+    className: ""
+    annotations: {}
+    tlsSecretName: ""
+
+# PostgreSQL and RabbitMQ volumes.
+storageClassName: ""
+
+objectStore:
+  type: s3 # s3 or azureblob
+  s3:
+    endpoint: ""
+    bucket: ""
+  azureblob:
+    accountUrl: ""
+    container: ""
+
+secretStore:
+  kind: ClusterSecretStore
+  name: ""
+  # Set when the backend stores each secret as a map, as Vault KV does; empty reads the whole value.
+  property: ""
+
+# Azure identity of the app pods. Empty disables workload identity.
+workloadIdentity:
+  clientId: ""

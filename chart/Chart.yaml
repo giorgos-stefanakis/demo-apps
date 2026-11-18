@@ -1,0 +1,5 @@
+apiVersion: v2
+name: demo-app
+description: The demo app with its PostgreSQL database, RabbitMQ broker, secrets and routing.
+type: application
+version: 0.1.0

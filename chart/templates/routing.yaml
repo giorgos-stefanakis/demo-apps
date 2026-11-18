@@ -1,0 +1,51 @@
+{{- $routing := .Values.routing }}
+{{- $hostname := required "routing.hostname is required" $routing.hostname }}
+{{- if eq $routing.type "gateway-api" }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: api
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    - {{- required "routing.gatewayApi.parentRef is required" $routing.gatewayApi.parentRef | toYaml | nindent 6 }}
+  hostnames:
+    - {{ $hostname | quote }}
+  rules:
+    - backendRefs:
+        - name: api
+          port: 80
+{{- else if eq $routing.type "ingress" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api
+  labels:
+    {{- include "demo.labels" . | nindent 4 }}
+  {{- with $routing.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ required "routing.ingress.className is required" $routing.ingress.className }}
+  {{- with $routing.ingress.tlsSecretName }}
+  tls:
+    - hosts:
+        - {{ $hostname | quote }}
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ $hostname | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  name: http
+{{- else }}
+{{- fail (printf "routing.type %q is not gateway-api or ingress" $routing.type) }}
+{{- end }}
