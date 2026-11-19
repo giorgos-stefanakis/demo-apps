@@ -3,6 +3,9 @@ image:
   tag: ""
   pullPolicy: IfNotPresent
 
+# Names of existing secrets that hold registry credentials. Leave empty when the cluster can already pull the image.
+imagePullSecrets: []
+
 # Sign-in settings of the Entra ID app registration.
 auth:
   tenantId: ""
