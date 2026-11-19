@@ -32,6 +32,10 @@ spec:
   persistence:
     storageClassName: {{ $storageClassName }}
     storage: 1Gi
+  rabbitmq:
+    # The default limit (2 GB) is larger than the volume, so the broker would block all publishers.
+    additionalConfig: |
+      disk_free_limit.absolute = 100MB
   resources:
     requests:
       cpu: 100m
